@@ -2,12 +2,13 @@ import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { DatabaseSync } from "node:sqlite";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PORT = process.env.PORT || 3000;
-const DB_FILE = path.join(__dirname, "debt-ledger.sqlite");
+
+const SUPABASE_URL = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -15,38 +16,6 @@ const MIME = {
   ".js": "application/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8"
 };
-
-const db = new DatabaseSync(DB_FILE);
-db.exec(
-  "PRAGMA foreign_keys = ON;" +
-  "CREATE TABLE IF NOT EXISTS customers (" +
-  "id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT NOT NULL UNIQUE, notes TEXT DEFAULT '', created_at TEXT NOT NULL);" +
-  "CREATE TABLE IF NOT EXISTS transactions (" +
-  "id TEXT PRIMARY KEY, customer_id TEXT NOT NULL REFERENCES customers(id) ON DELETE CASCADE, " +
-  "type TEXT NOT NULL CHECK (type IN ('debt', 'payment')), amount REAL NOT NULL CHECK (amount > 0), " +
-  "date TEXT NOT NULL, note TEXT DEFAULT '', created_at TEXT NOT NULL);"
-);
-
-function ensureOptionalPhoneSchema() {
-  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'customers'").get();
-  const hasUniquePhone = row && /phones+TEXTs+NOTs+NULLs+UNIQUE/i.test(row.sql || '');
-  if (hasUniquePhone) {
-    db.exec(
-      "PRAGMA foreign_keys = OFF;" +
-      "BEGIN TRANSACTION;" +
-      "CREATE TABLE customers_new (id TEXT PRIMARY KEY, name TEXT NOT NULL, phone TEXT DEFAULT '', notes TEXT DEFAULT '', created_at TEXT NOT NULL);" +
-      "INSERT INTO customers_new (id, name, phone, notes, created_at) SELECT id, name, COALESCE(phone, ''), COALESCE(notes, ''), created_at FROM customers;" +
-      "DROP TABLE customers;" +
-      "ALTER TABLE customers_new RENAME TO customers;" +
-      "COMMIT;" +
-      "PRAGMA foreign_keys = ON;"
-    );
-  }
-  db.exec("UPDATE customers SET phone = '' WHERE phone IS NULL;");
-  db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_customers_phone_filled ON customers(phone) WHERE phone <> '';");
-}
-
-ensureOptionalPhoneSchema();
 
 function uid(prefix) {
   return prefix + '_' + Math.random().toString(36).slice(2, 9) + '_' + Date.now().toString(36);
@@ -66,10 +35,6 @@ function normalizeDateTime(value) {
   return raw.length === 10 ? raw + 'T00:00' : raw;
 }
 
-function dateOnly(value) {
-  return String(value || '').slice(0, 10);
-}
-
 function sendJson(res, status, data) {
   res.writeHead(status, {
     'Content-Type': 'application/json; charset=utf-8',
@@ -79,7 +44,10 @@ function sendJson(res, status, data) {
 }
 
 function sendText(res, status, text) {
-  res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.writeHead(status, {
+    'Content-Type': 'text/plain; charset=utf-8',
+    'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
+  });
   res.end(text);
 }
 
@@ -110,110 +78,204 @@ function serveStatic(req, res) {
   fs.createReadStream(filePath).pipe(res);
 }
 
-function seedDemo() {
-  db.exec('DELETE FROM transactions; DELETE FROM customers;');
-  const now = new Date().toISOString();
-  const transactionTime = nowLocalValue();
-  const customers = [
-    { id: uid('cus'), name: 'أحمد محمود', phone: '01012345678', notes: 'عميل دائم' },
-    { id: uid('cus'), name: 'منى حسن', phone: '01198765432', notes: 'استحقاق شهري' },
-    { id: uid('cus'), name: 'سامي فوزي', phone: '01222223333', notes: 'يحتاج متابعة' },
-    { id: uid('cus'), name: 'سارة أحمد', phone: '01056789011', notes: 'تجربة بحث' },
-    { id: uid('cus'), name: 'محمد علي', phone: '01122334455', notes: 'عميل تجريبي' },
-    { id: uid('cus'), name: 'أسماء فؤاد', phone: '01233445566', notes: 'منطقة شرق' },
-    { id: uid('cus'), name: 'يوسف نبيل', phone: '01099887766', notes: 'متابعة أسبوعية' },
-    { id: uid('cus'), name: 'نادية كمال', phone: '01544556677', notes: 'استحقاق آخر الشهر' },
-    { id: uid('cus'), name: 'خالد جمال', phone: '01277889900', notes: 'بحث سريع' },
-    { id: uid('cus'), name: 'مها سمير', phone: '01155667788', notes: 'عميل نشط' },
-    { id: uid('cus'), name: 'عمرو شريف', phone: '01033221144', notes: 'خدمة متكررة' },
-    { id: uid('cus'), name: 'ريم حسام', phone: '01566778899', notes: 'تجربة أرقام' },
-    { id: uid('cus'), name: 'طارق وائل', phone: '01100998877', notes: 'عميل جديد' }
-  ];
-  const insertCustomer = db.prepare('INSERT INTO customers (id, name, phone, notes, created_at) VALUES (?, ?, ?, ?, ?)');
-  const insertTxn = db.prepare('INSERT INTO transactions (id, customer_id, type, amount, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)');
-  for (const c of customers) insertCustomer.run(c.id, c.name, c.phone, c.notes, now);
-  insertTxn.run(uid('trx'), customers[0].id, 'debt', 1200, transactionTime, 'فاتورة أولى', now);
-  insertTxn.run(uid('trx'), customers[0].id, 'payment', 500, transactionTime, 'دفعة جزئية', now);
-  insertTxn.run(uid('trx'), customers[1].id, 'debt', 750, transactionTime, 'توريد', now);
-  insertTxn.run(uid('trx'), customers[2].id, 'debt', 300, transactionTime, 'خدمة', now);
-  insertTxn.run(uid('trx'), customers[3].id, 'debt', 420, transactionTime, 'بيانات تجريبية', now);
-  insertTxn.run(uid('trx'), customers[4].id, 'payment', 200, transactionTime, 'بيانات تجريبية', now);
-  insertTxn.run(uid('trx'), customers[5].id, 'debt', 580, transactionTime, 'بيانات تجريبية', now);
-  insertTxn.run(uid('trx'), customers[6].id, 'debt', 190, transactionTime, 'بيانات تجريبية', now);
-  insertTxn.run(uid('trx'), customers[7].id, 'payment', 120, transactionTime, 'بيانات تجريبية', now);
-  insertTxn.run(uid('trx'), customers[8].id, 'debt', 760, transactionTime, 'بيانات تجريبية', now);
-  insertTxn.run(uid('trx'), customers[9].id, 'debt', 330, transactionTime, 'بيانات تجريبية', now);
-  insertTxn.run(uid('trx'), customers[10].id, 'payment', 150, transactionTime, 'بيانات تجريبية', now);
+function ensureSupabase() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    const missing = [];
+    if (!SUPABASE_URL) missing.push('SUPABASE_URL');
+    if (!SUPABASE_SERVICE_ROLE_KEY) missing.push('SUPABASE_SERVICE_ROLE_KEY');
+    throw new Error('Supabase env vars missing: ' + missing.join(', '));
+  }
 }
 
-function customersWithBalance() {
-  const rows = db.prepare(
-    "SELECT c.id, c.name, c.phone, c.notes, c.created_at AS createdAt, " +
-    "COALESCE(SUM(CASE WHEN t.type = 'debt' THEN t.amount ELSE -t.amount END), 0) AS balance, " +
-    "MAX(t.date) AS latestActivityDate, MAX(t.created_at) AS latestCreatedAt " +
-    "FROM customers c LEFT JOIN transactions t ON t.customer_id = c.id " +
-    "GROUP BY c.id ORDER BY balance DESC, c.name ASC"
-  ).all();
-  return rows.map((row) => ({
+function supabaseUrl(table, query) {
+  const url = new URL(SUPABASE_URL + '/rest/v1/' + table);
+  Object.entries(query || {}).forEach(([key, value]) => url.searchParams.set(key, value));
+  return url;
+}
+
+async function sb(table, options = {}) {
+  ensureSupabase();
+  const response = await fetch(supabaseUrl(table, options.query), {
+    method: options.method || 'GET',
+    headers: {
+      apikey: SUPABASE_SERVICE_ROLE_KEY,
+      Authorization: 'Bearer ' + SUPABASE_SERVICE_ROLE_KEY,
+      'Content-Type': 'application/json',
+      Prefer: options.prefer || 'return=representation'
+    },
+    body: options.body == null ? undefined : JSON.stringify(options.body)
+  });
+  const raw = await response.text();
+  const data = raw ? JSON.parse(raw) : null;
+  if (!response.ok) {
+    throw new Error((data && (data.message || data.error || data.details)) || 'Supabase request failed');
+  }
+  return data;
+}
+
+async function allCustomersRaw() {
+  return await sb('customers', {
+    query: { select: 'id,name,phone,notes,created_at', order: 'name.asc' }
+  });
+}
+
+async function allTransactionsRaw() {
+  return await sb('transactions', {
+    query: { select: 'id,customer_id,type,amount,date,note,created_at', order: 'date.asc,created_at.asc' }
+  });
+}
+
+function mapCustomer(row) {
+  return {
     id: row.id,
     name: row.name,
-    phone: row.phone,
+    phone: row.phone || '',
     notes: row.notes || '',
-    createdAt: row.createdAt,
-    balance: Number(row.balance) || 0,
-    latestActivityDate: row.latestActivityDate || null,
-    latestCreatedAt: row.latestCreatedAt || row.createdAt || null
-  }));
+    createdAt: row.created_at
+  };
 }
 
-function summaryData() {
+function mapTransaction(row) {
+  return {
+    id: row.id,
+    customerId: row.customer_id,
+    type: row.type,
+    amount: Number(row.amount) || 0,
+    date: row.date,
+    note: row.note || '',
+    createdAt: row.created_at
+  };
+}
+
+async function customersWithBalance() {
+  const [customers, transactions] = await Promise.all([allCustomersRaw(), allTransactionsRaw()]);
+  const totals = new Map();
+  const latest = new Map();
+
+  transactions.forEach((row) => {
+    const amount = Number(row.amount) || 0;
+    const delta = row.type === 'debt' ? amount : -amount;
+    totals.set(row.customer_id, (totals.get(row.customer_id) || 0) + delta);
+    const old = latest.get(row.customer_id);
+    if (!old || String(row.date) > String(old.date) || (row.date === old.date && String(row.created_at) > String(old.created_at))) {
+      latest.set(row.customer_id, row);
+    }
+  });
+
+  return customers.map((row) => {
+    const customer = mapCustomer(row);
+    const latestRow = latest.get(row.id);
+    return {
+      ...customer,
+      balance: totals.get(row.id) || 0,
+      latestActivityDate: latestRow ? latestRow.date : null,
+      latestCreatedAt: latestRow ? latestRow.created_at : row.created_at
+    };
+  }).sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name, 'ar'));
+}
+
+async function summaryData() {
   const today = todayISO();
-  const customers = customersWithBalance();
-  const totalDebt = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'debt'").get().total;
-  const totalPaid = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE type = 'payment'").get().total;
-  const todayTransactions = db.prepare('SELECT COUNT(*) AS total FROM transactions WHERE substr(date, 1, 10) = ?').get(today).total;
-  const todayDebt = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE substr(date, 1, 10) = ? AND type = 'debt'").get(today).total;
-  const todayPaid = db.prepare("SELECT COALESCE(SUM(amount), 0) AS total FROM transactions WHERE substr(date, 1, 10) = ? AND type = 'payment'").get(today).total;
+  const [customers, transactions] = await Promise.all([customersWithBalance(), allTransactionsRaw()]);
+  const totalDebt = transactions.filter((row) => row.type === 'debt').reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const totalPaid = transactions.filter((row) => row.type === 'payment').reduce((sum, row) => sum + Number(row.amount || 0), 0);
+  const todayRows = transactions.filter((row) => String(row.date || '').slice(0, 10) === today);
   return {
     customers: customers.length,
     active: customers.filter((customer) => customer.balance !== 0).length,
-    totalDebt: Number(totalDebt) || 0,
-    totalPaid: Number(totalPaid) || 0,
-    todayTransactions: Number(todayTransactions) || 0,
-    todayDebt: Number(todayDebt) || 0,
-    todayPaid: Number(todayPaid) || 0,
+    totalDebt,
+    totalPaid,
+    todayTransactions: todayRows.length,
+    todayDebt: todayRows.filter((row) => row.type === 'debt').reduce((sum, row) => sum + Number(row.amount || 0), 0),
+    todayPaid: todayRows.filter((row) => row.type === 'payment').reduce((sum, row) => sum + Number(row.amount || 0), 0),
     openCustomers: customers.filter((customer) => customer.balance > 0).length
   };
 }
 
-function findCustomer(id) {
-  return db.prepare('SELECT id, name, phone, notes, created_at AS createdAt FROM customers WHERE id = ?').get(id) || null;
+async function findCustomer(id) {
+  const rows = await sb('customers', {
+    query: { select: 'id,name,phone,notes,created_at', id: 'eq.' + id, limit: '1' }
+  });
+  return rows[0] ? mapCustomer(rows[0]) : null;
 }
 
-function statementForCustomer(customerId) {
-  const rows = db.prepare('SELECT id, customer_id AS customerId, type, amount, date, note, created_at AS createdAt FROM transactions WHERE customer_id = ? ORDER BY date ASC, created_at ASC').all(customerId);
+async function statementForCustomer(customerId) {
+  const rows = await sb('transactions', {
+    query: {
+      select: 'id,customer_id,type,amount,date,note,created_at',
+      customer_id: 'eq.' + customerId,
+      order: 'date.asc,created_at.asc'
+    }
+  });
   let running = 0;
   return rows.map((row) => {
     running += row.type === 'debt' ? Number(row.amount) : -Number(row.amount);
-    return { ...row, amount: Number(row.amount), note: row.note || '', runningBalance: running };
+    return { ...mapTransaction(row), runningBalance: running };
   });
 }
 
-const server = http.createServer(async (req, res) => {
-  const reqUrl = new URL(req.url, 'http://localhost');
-  const pathname = reqUrl.pathname;
+async function resetData() {
+  await sb('transactions', { method: 'DELETE', query: { id: 'not.is.null' }, prefer: 'return=minimal' });
+  await sb('customers', { method: 'DELETE', query: { id: 'not.is.null' }, prefer: 'return=minimal' });
+}
 
-  if (pathname === '/api/health') return sendJson(res, 200, { ok: true, db: true });
-  if (pathname === '/api/summary' && req.method === 'GET') return sendJson(res, 200, summaryData());
-  if (pathname === '/api/customers' && req.method === 'GET') return sendJson(res, 200, customersWithBalance());
-  if (pathname === '/api/state' && req.method === 'GET') return sendJson(res, 200, { customers: customersWithBalance(), ledger: db.prepare('SELECT id, customer_id AS customerId, type, amount, date, note, created_at AS createdAt FROM transactions ORDER BY created_at DESC').all(), selectedCustomerId: '' });
+async function seedDemo() {
+  await resetData();
+  const now = new Date().toISOString();
+  const transactionTime = nowLocalValue();
+  const customers = [
+    { id: uid('cus'), name: 'أحمد محمود', phone: '01012345678', notes: 'عميل دائم', created_at: now },
+    { id: uid('cus'), name: 'منى حسن', phone: '01198765432', notes: 'استحقاق شهري', created_at: now },
+    { id: uid('cus'), name: 'سامي فوزي', phone: '01222223333', notes: 'يحتاج متابعة', created_at: now },
+    { id: uid('cus'), name: 'سارة أحمد', phone: '01056789011', notes: 'تجربة بحث', created_at: now },
+    { id: uid('cus'), name: 'محمد علي', phone: '01122334455', notes: 'عميل تجريبي', created_at: now },
+    { id: uid('cus'), name: 'أسماء فؤاد', phone: '01233445566', notes: 'منطقة شرق', created_at: now },
+    { id: uid('cus'), name: 'يوسف نبيل', phone: '01099887766', notes: 'متابعة أسبوعية', created_at: now },
+    { id: uid('cus'), name: 'نادية كمال', phone: '01544556677', notes: 'استحقاق آخر الشهر', created_at: now },
+    { id: uid('cus'), name: 'خالد جمال', phone: '01277889900', notes: 'بحث سريع', created_at: now },
+    { id: uid('cus'), name: 'مها سمير', phone: '01155667788', notes: 'عميل نشط', created_at: now },
+    { id: uid('cus'), name: 'عمرو شريف', phone: '01033221144', notes: 'خدمة متكررة', created_at: now },
+    { id: uid('cus'), name: 'ريم حسام', phone: '01566778899', notes: 'تجربة أرقام', created_at: now },
+    { id: uid('cus'), name: 'طارق وائل', phone: '01100998877', notes: 'عميل جديد', created_at: now }
+  ];
+  await sb('customers', { method: 'POST', body: customers, prefer: 'return=minimal' });
+  const tx = [
+    [customers[0].id, 'debt', 1200, 'فاتورة أولى'],
+    [customers[0].id, 'payment', 500, 'دفعة جزئية'],
+    [customers[1].id, 'debt', 750, 'توريد'],
+    [customers[2].id, 'debt', 300, 'خدمة'],
+    [customers[3].id, 'debt', 420, 'بيانات تجريبية'],
+    [customers[4].id, 'payment', 200, 'بيانات تجريبية'],
+    [customers[5].id, 'debt', 580, 'بيانات تجريبية'],
+    [customers[6].id, 'debt', 190, 'بيانات تجريبية'],
+    [customers[7].id, 'payment', 120, 'بيانات تجريبية'],
+    [customers[8].id, 'debt', 760, 'بيانات تجريبية'],
+    [customers[9].id, 'debt', 330, 'بيانات تجريبية'],
+    [customers[10].id, 'payment', 150, 'بيانات تجريبية']
+  ].map(([customer_id, type, amount, note]) => ({
+    id: uid('trx'),
+    customer_id,
+    type,
+    amount,
+    date: transactionTime,
+    note,
+    created_at: now
+  }));
+  await sb('transactions', { method: 'POST', body: tx, prefer: 'return=minimal' });
+}
+
+async function handleApi(req, res, pathname) {
+  if (pathname === '/api/health') return sendJson(res, 200, { ok: true, db: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY), storage: 'supabase' });
+  if (pathname === '/api/summary' && req.method === 'GET') return sendJson(res, 200, await summaryData());
+  if (pathname === '/api/customers' && req.method === 'GET') return sendJson(res, 200, await customersWithBalance());
+  if (pathname === '/api/state' && req.method === 'GET') return sendJson(res, 200, { customers: await customersWithBalance(), ledger: (await allTransactionsRaw()).map(mapTransaction), selectedCustomerId: '' });
 
   if (pathname === '/api/seed' && req.method === 'POST') {
-    seedDemo();
+    await seedDemo();
     return sendJson(res, 200, { ok: true });
   }
   if (pathname === '/api/reset' && req.method === 'POST') {
-    db.exec('DELETE FROM transactions; DELETE FROM customers;');
+    await resetData();
     return sendJson(res, 200, { ok: true });
   }
   if (pathname === '/api/customers' && req.method === 'POST') {
@@ -227,38 +289,51 @@ const server = http.createServer(async (req, res) => {
     if (!name) return sendJson(res, 400, { error: 'اسم العميل مطلوب' });
     if (openingDebt < 0 || !Number.isFinite(openingDebt)) return sendJson(res, 400, { error: 'المديونية الافتتاحية غير صحيحة' });
     if (phone) {
-      const duplicate = db.prepare('SELECT id FROM customers WHERE phone = ? AND id <> ?').get(phone, id || '');
-      if (duplicate) return sendJson(res, 400, { error: 'رقم الهاتف مسجل مسبقًا' });
+      const duplicate = await sb('customers', { query: { select: 'id', phone: 'eq.' + phone } });
+      if (duplicate.some((row) => row.id !== id)) return sendJson(res, 400, { error: 'رقم الهاتف مسجل مسبقًا' });
     }
+
     let savedCustomerId = id;
     if (id) {
-      db.prepare('UPDATE customers SET name = ?, phone = ?, notes = ? WHERE id = ?').run(name, phone, notes, id);
+      await sb('customers', {
+        method: 'PATCH',
+        query: { id: 'eq.' + id },
+        body: { name, phone, notes },
+        prefer: 'return=minimal'
+      });
     } else {
-      const customerId = uid('cus');
-      savedCustomerId = customerId;
       const now = new Date().toISOString();
-      db.prepare('INSERT INTO customers (id, name, phone, notes, created_at) VALUES (?, ?, ?, ?, ?)').run(customerId, name, phone, notes, now);
+      savedCustomerId = uid('cus');
+      await sb('customers', {
+        method: 'POST',
+        body: { id: savedCustomerId, name, phone, notes, created_at: now },
+        prefer: 'return=minimal'
+      });
       const linkedType = body.linkedTransactionType === 'payment' ? 'payment' : 'debt';
       const linkedAmount = Number(body.linkedTransactionAmount || openingDebt || 0);
       const linkedDate = normalizeDateTime(body.linkedTransactionDate || openingDebtDate);
       const linkedNote = String(body.linkedTransactionNote || '').trim() || (linkedType === 'payment' ? 'دفع فلوس' : 'مديونية افتتاحية');
       if (linkedAmount > 0) {
-        db.prepare('INSERT INTO transactions (id, customer_id, type, amount, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(uid('trx'), customerId, linkedType, linkedAmount, linkedDate, linkedNote, now);
+        await sb('transactions', {
+          method: 'POST',
+          body: { id: uid('trx'), customer_id: savedCustomerId, type: linkedType, amount: linkedAmount, date: linkedDate, note: linkedNote, created_at: now },
+          prefer: 'return=minimal'
+        });
       }
     }
     return sendJson(res, 200, { ok: true, customerId: savedCustomerId });
   }
   if (pathname.match(/^\/api\/customers\/[^/]+$/) && req.method === 'DELETE') {
     const id = pathname.split('/').pop();
-    db.prepare('DELETE FROM customers WHERE id = ?').run(id);
+    await sb('customers', { method: 'DELETE', query: { id: 'eq.' + id }, prefer: 'return=minimal' });
     return sendJson(res, 200, { ok: true });
   }
   if (pathname.match(/^\/api\/customers\/[^/]+\/statement$/) && req.method === 'GET') {
     const id = pathname.split('/')[3];
-    const customer = findCustomer(id);
+    const customer = await findCustomer(id);
     if (!customer) return sendJson(res, 404, { error: 'العميل غير موجود' });
-    const enriched = customersWithBalance().find((item) => item.id === id) || customer;
-    return sendJson(res, 200, { customer: enriched, statement: statementForCustomer(id), latestActivityDate: enriched.latestActivityDate || null });
+    const enriched = (await customersWithBalance()).find((item) => item.id === id) || customer;
+    return sendJson(res, 200, { customer: enriched, statement: await statementForCustomer(id), latestActivityDate: enriched.latestActivityDate || null });
   }
   if (pathname === '/api/transactions' && req.method === 'POST') {
     const body = await parseBody(req);
@@ -267,18 +342,37 @@ const server = http.createServer(async (req, res) => {
     const amount = Number(body.amount);
     const date = normalizeDateTime(body.date || todayISO());
     const note = String(body.note || '').trim();
-    if (!findCustomer(customerId)) return sendJson(res, 400, { error: 'العميل غير موجود' });
+    if (!(await findCustomer(customerId))) return sendJson(res, 400, { error: 'العميل غير موجود' });
     if (!Number.isFinite(amount) || amount <= 0) return sendJson(res, 400, { error: 'المبلغ غير صحيح' });
-    db.prepare('INSERT INTO transactions (id, customer_id, type, amount, date, note, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').run(uid('trx'), customerId, type, amount, date, note, new Date().toISOString());
+    await sb('transactions', {
+      method: 'POST',
+      body: { id: uid('trx'), customer_id: customerId, type, amount, date, note, created_at: new Date().toISOString() },
+      prefer: 'return=minimal'
+    });
     return sendJson(res, 200, { ok: true });
   }
   if (pathname.match(/^\/api\/transactions\/[^/]+$/) && req.method === 'DELETE') {
     const id = pathname.split('/').pop();
-    db.prepare('DELETE FROM transactions WHERE id = ?').run(id);
+    await sb('transactions', { method: 'DELETE', query: { id: 'eq.' + id }, prefer: 'return=minimal' });
     return sendJson(res, 200, { ok: true });
   }
 
-  return serveStatic(req, res);
+  return null;
+}
+
+const server = http.createServer(async (req, res) => {
+  const reqUrl = new URL(req.url, 'http://localhost');
+  const pathname = reqUrl.pathname;
+
+  try {
+    if (pathname.startsWith('/api/')) {
+      const handled = await handleApi(req, res, pathname);
+      if (handled !== null) return;
+    }
+    return serveStatic(req, res);
+  } catch (error) {
+    return sendJson(res, 500, { error: error.message || 'حدث خطأ في الخادم' });
+  }
 });
 
 server.listen(PORT, () => {
