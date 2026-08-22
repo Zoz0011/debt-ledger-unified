@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>دفتر المديونيات</title>
+    <meta name="description" content="إدارة مديونيات العملاء، تسجيل الدفعات، البحث برقم الهاتف، وكشف حساب كامل لكل عميل." />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="bg-glow bg-glow-a"></div>
+    <div class="bg-glow bg-glow-b"></div>
+    <main class="shell">
+      <header class="hero card">
+        <div>
+          <p class="eyebrow">نظام عربي لإدارة المديونيات</p>
+          <h1>كل مديونية تحت السيطرة، من أول مكالمة لآخر دفعة.</h1>
+          <p class="lead">ابحث برقم الموبايل، راقب الرصيد لحظيًا، وسجل كل حركة مع كشف واضح للعميل والحسابات اليومية.</p>
+        </div>
+        <div class="hero-actions">
+          <button type="button" class="btn primary" id="scrollToSearch">ابدأ بالبحث</button>
+          <button type="button" class="btn ghost" id="seedDemo">تحميل بيانات تجريبية</button>
+          <button type="button" class="btn ghost" id="exportAll">تصدير CSV</button>
+          <button type="button" class="btn ghost" id="resetAll">مسح البيانات</button>
+        </div>
+      </header>
+
+      <section class="stats" id="stats"></section>
+
+      <section class="layout-grid">
+        <article class="card stack search-panel" id="searchPanel">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">بحث سريع</p>
+              <h2>ابحث بالاسم أو رقم الهاتف</h2>
+            </div>
+          </div>
+          <label class="field">
+            <span>الاسم أو رقم الموبايل</span>
+            <input id="phoneSearch" placeholder="مثال: زiad أو 01012345678" />
+          </label>
+          <div class="search-suggestions" id="searchSuggestions"></div>
+          <div class="search-result" id="searchResult"><p>اكتب الاسم أو رقم الهاتف لعرض العميل إن وجد.</p></div>
+        </article>
+
+        <article class="card stack">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">إضافة عميل</p>
+              <h2>عميل جديد أو تعديل عميل</h2>
+            </div>
+            <button type="button" class="text-btn" id="clearCustomerForm">إلغاء التعديل</button>
+          </div>
+          <form id="customerForm" class="form-grid two-col">
+            <input type="hidden" id="customerId" />
+            <label class="field"><span>اسم العميل</span><input id="customerName" required placeholder="اسم واضح" /></label>
+            <label class="field"><span>الموبايل اختياري</span><input id="customerPhone" inputmode="tel" placeholder="اختياري" /></label>
+            <label class="field"><span>مديونية افتتاحية</span><input id="openingDebt" type="number" min="0" step="0.01" placeholder="اختياري" /></label>
+            <label class="field"><span>التاريخ والساعة</span><input id="openingDebtDate" type="datetime-local" /></label>
+            <label class="field full"><span>ملاحظات</span><textarea id="customerNotes" rows="3" placeholder="أي تفاصيل إضافية"></textarea></label>
+            <div class="form-divider full">
+              <span>حركة مرتبطة بالعميل</span>
+            </div>
+            <label class="field"><span>نوع الحركة</span><select id="linkedTransactionType"><option value="debt">أخذ من المحل</option><option value="payment">دفع فلوس</option></select></label>
+            <label class="field"><span>المبلغ</span><input id="linkedTransactionAmount" type="number" min="0.01" step="0.01" placeholder="اختياري" /></label>
+            <label class="field"><span>التاريخ والساعة</span><input id="linkedTransactionDate" type="datetime-local" /></label>
+            <label class="field" id="linkedPaymentMethodField"><span>طريقة الدفع</span><select id="linkedPaymentMethod"><option value="كاش">تحويل كاش</option><option value="نقدي">دفع نقدي</option><option value="انستا">انستا باي</option><option value="اخرى">اخرى</option></select></label>
+            <label class="field full"><span id="linkedTransactionNoteLabel">سبب الحركة - اكتبه بإيدك</span><input id="linkedTransactionNote" placeholder="اكتب السبب: تليفون، اسكرينة، جراب، سبب الدفع..." /></label>
+            <div class="actions full"><button class="btn primary" type="submit">حفظ العميل</button></div>
+          </form>
+        </article>
+      </section>
+
+      <section class="layout-grid wide">
+        <article class="card stack">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">الحركات</p>
+              <h2>تسجيل مديونية أو دفعة</h2>
+            </div>
+          </div>
+          <form id="transactionForm" class="form-grid transaction-grid">
+            <label class="field transaction-customer"><span>العميل</span><select id="transactionCustomer"></select></label>
+            <label class="field transaction-type"><span>نوع الحركة</span><select id="transactionType"><option value="debt">أخذ من المحل</option><option value="payment">دفع فلوس</option></select></label>
+            <label class="field transaction-amount"><span>المبلغ</span><input id="transactionAmount" required type="number" min="0.01" step="0.01" placeholder="اكتب المبلغ" /></label>
+            <label class="field transaction-date"><span>التاريخ والساعة</span><input id="transactionDate" type="datetime-local" /></label>
+            <label class="field transaction-payment-method" id="paymentMethodField"><span>طريقة الدفع</span><select id="transactionPaymentMethod"><option value="كاش">تحويل كاش</option><option value="نقدي">دفع نقدي</option><option value="انستا">انستا باي</option><option value="اخرى">اخرى</option></select></label>
+            <label class="field transaction-note"><span id="transactionNoteLabel">سبب الحركة - اكتبه بإيدك</span><input id="transactionNote" placeholder="اكتب السبب: تليفون، اسكرينة، جراب، سبب الدفع..." /></label>
+            <div class="actions transaction-actions"><button class="btn primary" type="submit">تسجيل الحركة</button></div>
+          </form>
+        </article>
+
+        <article class="card stack">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">التقارير</p>
+              <h2>ملخص اليوم والحركات</h2>
+            </div>
+            <div class="inline-actions">
+              <button type="button" class="text-btn" id="exportCustomers">CSV العملاء</button>
+              <button type="button" class="text-btn" id="exportLedger">CSV الحركات</button>
+            </div>
+          </div>
+          <div class="report-grid" id="reportGrid"></div>
+        </article>
+      </section>
+
+      <section class="layout-grid wide">
+        <article class="card stack">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">العملاء</p>
+              <h2>قائمة العملاء</h2>
+            </div>
+          </div>
+          <div class="table-wrap"><table><thead><tr><th>الاسم</th><th>الموبايل</th><th>الرصيد</th><th>آخر حركة</th><th>إجراءات</th></tr></thead><tbody id="customersTable"></tbody></table></div>
+        </article>
+
+        <article class="card stack">
+          <div class="section-head">
+            <div>
+              <p class="eyebrow">كشف الحساب</p>
+              <h2 id="statementTitle">اختر عميلًا لعرض الكشـف</h2>
+            </div>
+          </div>
+          <div class="statement-summary" id="statementSummary"></div>
+          <div class="customer-report" id="customerReport"></div>
+          <div class="table-wrap statement-table"><table><thead><tr><th>التاريخ</th><th></th><th>التفاصيل</th><th>المبلغ</th><th>الرصيد</th><th>إجراء</th></tr></thead><tbody id="statementTable"></tbody></table></div>
+        </article>
+      </section>
+    </main>
+
+    <dialog id="confirmDialog" class="dialog">
+      <form method="dialog" class="dialog-card">
+        <h3 id="dialogTitle">تأكيد</h3>
+        <p id="dialogMessage"></p>
+        <div class="dialog-actions"><button type="button" value="cancel" class="btn ghost" id="dialogCancel">إلغاء</button><button type="button" value="confirm" class="btn primary" id="dialogConfirm">تأكيد</button></div>
+      </form>
+    </dialog>
+
+    <script src="./app.js"></script>
+  </body>
+</html>
