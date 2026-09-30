@@ -396,6 +396,8 @@ function initializeBackNavigation() {
   window.addEventListener('popstate', keepBackInsideApp);
 }
 
+window.__beinyGoHome = keepBackInsideApp;
+
 function openTransactionDialog() {
   state.transactionType = 'increase';
   state.paymentMethod = 'cash';
