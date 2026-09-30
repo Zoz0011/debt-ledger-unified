@@ -5,7 +5,7 @@ const config: CapacitorConfig = {
   appName: 'بيني',
   webDir: 'web',
   server: {
-    url: 'https://beiny-ledger.nutmeg-fern-4150.chatgpt.site',
+    url: 'https://beiny-ledger.pauper-93phylumbunni.chatgpt.site',
     androidScheme: 'https'
   }
 };
