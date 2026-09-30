@@ -29,8 +29,10 @@ const el = {
   peopleList: document.getElementById('peopleList'),
   activityList: document.getElementById('activityList'),
   peopleSearch: document.getElementById('peopleSearch'),
+  activitySearch: document.getElementById('activitySearch'),
   personDetail: document.getElementById('personDetail'),
   personTransactions: document.getElementById('personTransactions'),
+  personActions: document.getElementById('personActions'),
   transactionDialog: document.getElementById('transactionDialog'),
   transactionForm: document.getElementById('transactionForm'),
   transactionPerson: document.getElementById('transactionPerson'),
@@ -351,7 +353,10 @@ function renderPeople() {
 
 function renderActivityView() {
   const filtered = activeTransactions().filter(function (entry) {
-    return state.activityFilter === 'all' || transactionInfo(entry.type).category === state.activityFilter;
+    const person = personById(entry.personId);
+    const query = el.activitySearch.value.trim().toLowerCase();
+    const searchable = [person && person.name, entry.note, entry.amount, formatDate(entry.date)].filter(Boolean).join(' ').toLowerCase();
+    return (state.activityFilter === 'all' || transactionInfo(entry.type).category === state.activityFilter) && (!query || searchable.includes(query));
   });
   renderActivity(el.activityList, filtered, 'لا توجد حركات بهذا النوع.');
 }
@@ -361,13 +366,36 @@ function renderPersonDetail() {
   if (!person) {
     el.personDetail.innerHTML = '';
     el.personTransactions.innerHTML = '';
+    el.personActions.innerHTML = '';
     return;
   }
   const balance = balanceFor(person.id);
   el.personDetail.innerHTML = '<div class="detail-person"><span class="person-avatar ' + person.type + '">' + escapeHtml(person.name.charAt(0)) + '</span><span><strong>' + escapeHtml(person.name) + '</strong><small>' + personLabel(person) + (person.phone ? ' · ' + escapeHtml(person.phone) : '') + '</small></span></div>' +
     '<div class="detail-balance"><small>' + balanceLabel(person, balance) + '</small><strong>' + formatMoney(balance) + '</strong></div>';
   const personEntries = activeTransactions().filter(function (entry) { return entry.personId === person.id; });
+  const phone = String(person.phone || '').replace(/\D/g, '');
+  const whatsappPhone = phone && (phone.startsWith('0') ? '2' + phone : phone);
+  const balanceText = balance >= 0 ? 'باقي ليّا عندك ' + formatMoney(balance) : 'باقي ليك عندي ' + formatMoney(balance);
+  const message = 'أهلًا ' + person.name + '، تذكير بسيط من صافي: ' + balanceText + '. لو تم السداد بلغني، شكرًا.';
+  el.personActions.innerHTML = '<button class="primary-action" type="button" data-open-transaction>＋ إضافة حركة لهذا الحساب</button>' +
+    (balance ? '<button class="secondary-action" type="button" data-settle-person="' + person.id + '">✓ تصفية الحساب الآن</button>' : '<span class="settled-note">✓ الحساب متصفّي</span>') +
+    (whatsappPhone ? '<a class="whatsapp-action" href="https://wa.me/' + encodeURIComponent(whatsappPhone) + '?text=' + encodeURIComponent(message) + '" target="_blank" rel="noopener">◉ إرسال تذكير واتساب</a>' : '');
   renderActivity(el.personTransactions, personEntries, 'لم تسجّل أي حركة لهذا الحساب بعد.');
+}
+
+function settlePerson(person) {
+  const balance = balanceFor(person.id);
+  if (!balance) return;
+  const direction = balance > 0 ? 'payment' : 'debt';
+  const wording = balance > 0 ? 'سيتم تسجيل دفعة تسدّد المبلغ الذي ليّا عنده.' : 'سيتم تسجيل حركة تسدّد المبلغ اللي ليه عندي.';
+  confirmAction('تصفية حساب ' + person.name, wording, function () {
+    const current = requireSession();
+    return db('transactions', { method: 'POST', prefer: 'return=minimal', body: { id: id('transaction'), user_id: current.user.id, customer_id: person.id, type: direction, amount: Math.abs(balance), date: today(), note: storedTransactionNote('cash', 'تسوية الحساب'), created_at: new Date().toISOString() } }).then(function () {
+      return load();
+    }).then(function () {
+      render();
+    });
+  });
 }
 
 function renderTransactionPeople() {
@@ -547,7 +575,7 @@ function downloadCsv() {
 }
 
 document.addEventListener('click', function (event) {
-  const target = event.target.closest('[data-view], [data-open-person], [data-open-transaction], [data-open-person-detail], [data-person-filter], [data-activity-filter], [data-transaction-type], [data-payment-method], [data-edit-transaction], [data-delete-transaction]');
+  const target = event.target.closest('[data-view], [data-open-person], [data-open-transaction], [data-open-person-detail], [data-person-filter], [data-activity-filter], [data-transaction-type], [data-payment-method], [data-edit-transaction], [data-delete-transaction], [data-settle-person]');
   if (!target) return;
   if (target.dataset.editTransaction) {
     const entry = state.transactions.find(function (item) { return item.id === target.dataset.editTransaction; });
@@ -559,6 +587,11 @@ document.addEventListener('click', function (event) {
     if (entry) confirmAction('حذف الحركة', 'سيتم حذف هذه الحركة فقط، ولن يمكن استرجاعها.', function () {
       return db('transactions', { method: 'DELETE', prefer: 'return=minimal', query: { id: 'eq.' + entry.id } }).then(function () { return load(); }).then(function () { render(); });
     });
+    return;
+  }
+  if (target.dataset.settlePerson) {
+    const person = personById(target.dataset.settlePerson);
+    if (person) settlePerson(person);
     return;
   }
   if (target.dataset.view) {
@@ -580,6 +613,7 @@ document.addEventListener('click', function (event) {
 });
 
 el.peopleSearch.addEventListener('input', renderPeople);
+el.activitySearch.addEventListener('input', renderActivityView);
 el.transactionForm.addEventListener('submit', saveTransaction);
 el.exportButton.addEventListener('click', downloadCsv);
 el.exportProfileButton.addEventListener('click', downloadCsv);

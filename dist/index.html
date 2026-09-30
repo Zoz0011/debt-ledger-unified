@@ -51,6 +51,7 @@
 
       <section class="view" id="activityView" data-view-panel="activity">
         <div class="page-title"><div><p class="date-label">دفترك</p><h1>كل الحركات</h1></div><button class="round-add" type="button" data-open-transaction aria-label="إضافة حركة">＋</button></div>
+        <label class="search activity-search"><span>⌕</span><input id="activitySearch" type="search" placeholder="ابحث بالاسم أو الملاحظة أو المبلغ" autocomplete="off" /></label>
         <div class="filters activity-filter" role="tablist"><button class="active" data-activity-filter="all" type="button">الكل</button><button data-activity-filter="owed" type="button">ديون</button><button data-activity-filter="payment" type="button">دفعات</button></div>
         <div class="activity-list full-list" id="activityList"></div>
       </section>
@@ -68,7 +69,7 @@
       <section class="view detail-view" id="detailView" data-view-panel="detail">
         <button class="back-button" type="button" data-view="people">← رجوع للحسابات</button>
         <div class="detail-hero" id="personDetail"></div>
-        <div class="detail-action"><button class="primary-action" type="button" data-open-transaction>＋ إضافة حركة لهذا الحساب</button></div>
+        <div class="detail-action" id="personActions"></div>
         <section class="section-head compact"><div><h2>سجل الحساب</h2><p>كل الحركات المسجّلة</p></div></section>
         <div class="activity-list" id="personTransactions"></div>
       </section>
