@@ -242,15 +242,15 @@ function personLabel(person) {
 }
 
 function balanceLabel(person, amount) {
-  if (amount > 0) return 'هو عليه لي';
-  if (amount < 0) return 'أنا عليا ليه';
+  if (amount > 0) return 'فلوس ليّا عنده';
+  if (amount < 0) return 'فلوس ليه عندي';
   return 'الحساب متوازن';
 }
 
 function transactionInfo(type) {
   const info = {
-    increase: { label: 'زوّد عليه', delta: 1, category: 'owed', symbol: '↓', tone: 'receive' },
-    decrease: { label: 'نزّل منه', delta: -1, category: 'payment', symbol: '✓', tone: 'pay' },
+    increase: { label: 'مبلغ ليّا عنده', delta: 1, category: 'owed', symbol: '↓', tone: 'receive' },
+    decrease: { label: 'مبلغ ليه عندي', delta: -1, category: 'payment', symbol: '✓', tone: 'pay' },
     set: { label: 'ضبط الرصيد', delta: 0, category: 'owed', symbol: '≡', tone: 'receive' },
     'customer-debt': { label: 'زوّد عليه', delta: 1, category: 'owed', symbol: '↓', tone: 'receive' },
     'customer-payment': { label: 'نزّل منه', delta: -1, category: 'payment', symbol: '✓', tone: 'pay' },
@@ -301,8 +301,8 @@ function renderSummary() {
   const payTotal = payables.reduce(function (sum, entry) { return sum + Math.abs(entry.balance); }, 0);
   el.receivableTotal.textContent = formatMoney(receiveTotal);
   el.payableTotal.textContent = formatMoney(payTotal);
-  el.receivablePeople.textContent = receivables.length ? receivables.length + ' شخص عليه لي' : 'لا توجد مستحقات';
-  el.payablePeople.textContent = payables.length ? payables.length + ' شخص أنا عليا ليه' : 'لا توجد التزامات';
+  el.receivablePeople.textContent = receivables.length ? receivables.length + ' شخص ليّا عنده' : 'لا توجد مبالغ ليّا';
+  el.payablePeople.textContent = payables.length ? payables.length + ' شخص ليه عندي' : 'لا توجد مبالغ عليّ';
 }
 
 function renderPeople() {
@@ -419,7 +419,7 @@ function updateTransactionTypeButtons() {
   el.transactionTypes.querySelectorAll('button').forEach(function (button) {
     button.classList.toggle('active', button.dataset.transactionType === state.transactionType);
   });
-  const copy = { increase: 'المبلغ اللي عليه', decrease: 'المبلغ اللي ليه' };
+  const copy = { increase: 'المبلغ اللي ليا عنده', decrease: 'المبلغ اللي ليه عندي' };
   el.amountLabel.childNodes[0].nodeValue = copy[state.transactionType] || copy.increase;
   el.transactionAmount.min = '0.01';
 }
