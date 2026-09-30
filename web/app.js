@@ -1,6 +1,7 @@
 const STORE_KEY = 'konnash-simple-ledger-v1';
 const INTENTIONALLY_EMPTY_KEY = 'beiny-intentionally-empty-v1';
 const AUTH_SESSION_KEY = 'beiny-supabase-session-v1';
+const THEME_KEY = 'beiny-theme-v1';
 const SUPABASE = window.BEINY_SUPABASE || {};
 const STARTER_PHONES = new Set(['01012345678', '01198765432', '01222223333', '01056789012', '01544556677', '01133445566', '01099887766', '01277889900', '01566778899', '01100998877']);
 const currency = new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
@@ -48,6 +49,11 @@ const el = {
   starterButton: document.getElementById('starterButton'),
   clearButton: document.getElementById('clearButton'),
   aboutButton: document.getElementById('aboutButton'),
+  themeButton: document.getElementById('themeButton'),
+  themeProfileButton: document.getElementById('themeProfileButton'),
+  themeStatus: document.getElementById('themeStatus'),
+  profileEmail: document.getElementById('profileEmail'),
+  logoutButton: document.getElementById('logoutButton'),
   loginGate: document.getElementById('loginGate'),
   loginForm: document.getElementById('loginForm'),
   loginEmail: document.getElementById('loginEmail'),
@@ -133,6 +139,45 @@ function hideLogin() {
   el.loginError.hidden = true;
   el.loginEmail.value = '';
   el.loginPassword.value = '';
+}
+
+function preferredTheme() {
+  const saved = localStorage.getItem(THEME_KEY);
+  if (saved === 'light' || saved === 'dark') return saved;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+
+function applyTheme(theme, persist) {
+  const next = theme === 'dark' ? 'dark' : 'light';
+  document.documentElement.dataset.theme = next;
+  document.documentElement.style.colorScheme = next;
+  if (persist) localStorage.setItem(THEME_KEY, next);
+  el.themeButton.textContent = next === 'dark' ? '☀' : '☾';
+  el.themeButton.title = next === 'dark' ? 'تفعيل الوضع الفاتح' : 'تفعيل الوضع الداكن';
+  el.themeButton.setAttribute('aria-pressed', String(next === 'dark'));
+  el.themeStatus.textContent = next === 'dark' ? 'الوضع الداكن مفعّل' : 'الوضع الفاتح مفعّل';
+}
+
+function toggleTheme() {
+  applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark', true);
+}
+
+async function signOut() {
+  const current = session();
+  try {
+    if (current && current.access_token) {
+      await supabaseRequest('/auth/v1/logout', { method: 'POST', headers: { Authorization: 'Bearer ' + current.access_token } });
+    }
+  } catch (_) {
+    // Removing the local session is enough to secure this device if the network is unavailable.
+  } finally {
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    state.people = [];
+    state.transactions = [];
+    state.selectedPersonId = '';
+    setView('home', { history: false });
+    showLogin('تم تسجيل الخروج بنجاح.');
+  }
 }
 
 async function load() {
@@ -318,9 +363,12 @@ function render() {
   renderActivityView();
   renderPersonDetail();
   renderTransactionPeople();
+  const current = session();
+  el.profileEmail.textContent = current && current.user && current.user.email ? current.user.email : 'دفترك محفوظ بأمان ومتزامن بين أجهزتك';
 }
 
-function setView(view) {
+function setView(view, options) {
+  const settings = options || {};
   state.view = view;
   document.querySelectorAll('[data-view-panel]').forEach(function (panel) {
     panel.classList.toggle('active', panel.dataset.viewPanel === view);
@@ -328,7 +376,24 @@ function setView(view) {
   document.querySelectorAll('.bottom-nav [data-view]').forEach(function (button) {
     button.classList.toggle('active', button.dataset.view === view);
   });
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  if (settings.history !== false && window.history && window.history.pushState) {
+    window.history.pushState({ view: view }, '', '#' + view);
+  }
+  window.scrollTo({ top: 0, behavior: settings.instant ? 'auto' : 'smooth' });
+}
+
+function keepBackInsideApp() {
+  if (state.view !== 'home') setView('home', { history: false, instant: true });
+  window.setTimeout(function () {
+    window.history.pushState({ view: 'home', guard: true }, '', '#home');
+  }, 0);
+}
+
+function initializeBackNavigation() {
+  if (!window.history || !window.history.pushState) return;
+  window.history.replaceState({ view: 'home' }, '', '#home');
+  window.history.pushState({ view: 'home', guard: true }, '', '#home');
+  window.addEventListener('popstate', keepBackInsideApp);
 }
 
 function openTransactionDialog() {
@@ -440,6 +505,7 @@ document.addEventListener('click', function (event) {
   const target = event.target.closest('[data-view], [data-open-person], [data-open-transaction], [data-open-person-detail], [data-person-filter], [data-activity-filter], [data-transaction-type], [data-payment-method]');
   if (!target) return;
   if (target.dataset.view) {
+    if (target.tagName === 'A') event.preventDefault();
     if (target.dataset.showBalance) {
       state.personFilter = target.dataset.showBalance;
       document.querySelectorAll('[data-person-filter]').forEach(function (button) { button.classList.toggle('active', button.dataset.personFilter === state.personFilter); });
@@ -488,9 +554,16 @@ document.querySelectorAll('.close-dialog').forEach(function (button) {
 });
 
 el.aboutButton.addEventListener('click', function () { alert('بيني: تطبيق بسيط للحسابات بينك وبين الناس.'); });
+el.themeButton.addEventListener('click', toggleTheme);
+el.themeProfileButton.addEventListener('click', toggleTheme);
+el.logoutButton.addEventListener('click', function () {
+  confirmAction('تسجيل الخروج', 'سيتم تسجيل خروجك من هذا الجهاز فقط، وستظل بياناتك محفوظة في حسابك.', signOut);
+});
 
 el.todayLabel.textContent = new Date().toLocaleDateString('ar-EG', { weekday: 'long', day: 'numeric', month: 'long' });
 el.transactionDate.value = today();
+applyTheme(preferredTheme(), false);
+initializeBackNavigation();
 el.loginForm.addEventListener('submit', async function (event) {
   event.preventDefault();
   try {

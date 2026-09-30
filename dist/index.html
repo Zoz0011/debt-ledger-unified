@@ -3,18 +3,19 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="theme-color" content="#08715a" />
+  <meta name="theme-color" content="#0f7f6e" />
   <title>بيني | كل حساب بينك وبين الناس</title>
   <meta name="description" content="بيني: سجّل حسابات الناس وتابع ما بينكم بسهولة." />
+  <link rel="icon" type="image/png" href="./assets/beiny-mark.png" />
   <link rel="stylesheet" href="./style.css" />
 </head>
 <body>
   <section class="login-gate" id="loginGate" aria-live="polite">
     <form class="login-card" id="loginForm">
-      <span class="profile-logo">ب</span>
-      <p class="dialog-kicker">دفترك الخاص</p>
-      <h1>ادخل إلى بيني</h1>
-      <p>بياناتك تُحفظ في حسابك وتظهر على أجهزتك بعد تسجيل الدخول.</p>
+      <div class="login-brand"><img src="./assets/beiny-mark.png" alt="شعار بيني" /><span>بيني</span></div>
+      <p class="dialog-kicker">دفتر واضح، وحسابات أهدى</p>
+      <h1>كل حساب في مكانه.</h1>
+      <p>سجّل دخولك لتكمل دفتر حساباتك بأمان ومن أي جهاز.</p>
       <label>البريد الإلكتروني<input id="loginEmail" type="email" autocomplete="email" required placeholder="name@example.com" /></label>
       <label>كلمة المرور<input id="loginPassword" type="password" autocomplete="current-password" required minlength="8" /></label>
       <p class="login-error" id="loginError" hidden></p>
@@ -24,8 +25,8 @@
   </section>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#home" data-view="home"><span class="brand-icon">ب</span><span>بيني</span></a>
-      <div class="topbar-actions"><button class="icon-btn" id="exportButton" type="button" title="تصدير البيانات">⇩</button><button class="avatar" id="aboutButton" type="button" title="عن بيني">أ</button></div>
+      <a class="brand" href="#home" data-view="home"><img class="brand-icon" src="./assets/beiny-mark.png" alt="" /><span>بيني</span></a>
+      <div class="topbar-actions"><button class="icon-btn" id="themeButton" type="button" title="تفعيل الوضع الداكن" aria-pressed="false">☾</button><button class="icon-btn" id="exportButton" type="button" title="تصدير البيانات">⇩</button><button class="avatar" id="aboutButton" type="button" title="عن بيني">ب</button></div>
     </header>
 
     <main class="main-content">
@@ -56,9 +57,11 @@
 
       <section class="view" id="profileView" data-view-panel="profile">
         <div class="page-title"><div><p class="date-label">حسابك</p><h1>إدارة الدفتر</h1></div></div>
-        <article class="profile-card"><span class="profile-logo">ب</span><div><strong>بيني</strong><small>دفترك محفوظ بأمان ومتزامن بين أجهزتك</small></div></article>
+        <article class="profile-card"><img class="profile-logo" src="./assets/beiny-mark.png" alt="" /><div><strong>بيني</strong><small id="profileEmail">دفترك محفوظ بأمان ومتزامن بين أجهزتك</small></div></article>
+        <button class="setting-row" id="themeProfileButton" type="button"><span class="setting-icon">◐</span><span>الوضع الداكن<small id="themeStatus">مفعّل حسب إعداد الجهاز</small></span><b>‹</b></button>
         <button class="setting-row" id="starterButton" type="button"><span class="setting-icon">＋</span><span>إضافة حسابات جاهزة للتجربة<small>إضافة ١٠ حسابات وحركات للتجربة</small></span><b>‹</b></button>
         <button class="setting-row" id="exportProfileButton" type="button"><span class="setting-icon">⇩</span><span>تصدير نسخة احتياطية<small>ملف CSV بالزبائن والحركات</small></span><b>‹</b></button>
+        <button class="setting-row logout-row" id="logoutButton" type="button"><span class="setting-icon">↪</span><span>تسجيل الخروج<small>اخرج من حسابك على هذا الجهاز</small></span><b>‹</b></button>
         <button class="setting-row danger-row" id="clearButton" type="button"><span class="setting-icon">×</span><span>مسح كل البيانات<small>لا يمكن التراجع بعد المسح</small></span><b>‹</b></button>
       </section>
 
@@ -73,10 +76,10 @@
 
     <nav class="bottom-nav" aria-label="القائمة الرئيسية">
       <button class="active" type="button" data-view="home"><span>⌂</span>الرئيسية</button>
-      <button type="button" data-view="people"><span>♙</span>الدفتر</button>
+      <button type="button" data-view="people"><span>◫</span>الدفتر</button>
       <button class="add-tab" type="button" data-open-transaction aria-label="إضافة حركة جديدة">＋</button>
       <button type="button" data-view="activity"><span>↕</span>الحركات</button>
-      <button type="button" data-view="profile"><span>☷</span>المزيد</button>
+      <button type="button" data-view="profile"><span>⚙</span>إدارة</button>
     </nav>
   </div>
 
