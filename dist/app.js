@@ -15,7 +15,8 @@ const state = {
   search: '',
   selectedPersonId: '',
   transactionType: 'increase',
-  paymentMethod: 'cash'
+  paymentMethod: 'cash',
+  editingTransactionId: ''
 };
 
 const el = {
@@ -36,7 +37,11 @@ const el = {
   transactionPhone: document.getElementById('transactionPhone'),
   peopleOptions: document.getElementById('peopleOptions'),
   transactionAmount: document.getElementById('transactionAmount'),
+  transactionNote: document.getElementById('transactionNote'),
   transactionDate: document.getElementById('transactionDate'),
+  transactionKicker: document.getElementById('transactionKicker'),
+  transactionTitle: document.getElementById('transactionTitle'),
+  transactionSubmit: document.getElementById('transactionSubmit'),
   amountLabel: document.getElementById('amountLabel'),
   transactionTypes: document.getElementById('transactionTypes'),
   paymentMethods: document.getElementById('paymentMethods'),
@@ -77,6 +82,21 @@ function formatMoney(amount) {
 function formatDate(date) {
   const value = new Date(String(date || '') + 'T12:00:00');
   return Number.isNaN(value.getTime()) ? '-' : value.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function paymentMethodFromNote(note) {
+  const prefix = String(note || '').split(' • ')[0];
+  return Object.keys({ cash: 'كاش', instapay: 'إنستا', 'cash-payment': 'نقدي' }).find(function (key) { return paymentMethodLabel(key) === prefix; }) || 'cash';
+}
+
+function transactionNoteFromStorage(note) {
+  const parts = String(note || '').split(' • ');
+  return ['كاش', 'إنستا', 'نقدي'].includes(parts[0]) ? parts.slice(1).join(' • ') : String(note || '');
+}
+
+function storedTransactionNote(method, note) {
+  const description = String(note || '').trim();
+  return paymentMethodLabel(method) + (description ? ' • ' + description : '');
 }
 
 function session() {
@@ -190,7 +210,7 @@ async function load() {
   });
   state.transactions = (results[1] || []).map(function (entry) {
     const increase = entry.type === 'debt';
-    return { id: entry.id, personId: entry.customer_id, type: increase ? 'increase' : 'decrease', amount: Number(entry.amount) || 0, delta: increase ? Number(entry.amount) || 0 : -(Number(entry.amount) || 0), method: 'cash', note: entry.note || '', date: entry.date, createdAt: entry.created_at };
+    return { id: entry.id, personId: entry.customer_id, type: increase ? 'increase' : 'decrease', amount: Number(entry.amount) || 0, delta: increase ? Number(entry.amount) || 0 : -(Number(entry.amount) || 0), method: paymentMethodFromNote(entry.note), note: transactionNoteFromStorage(entry.note), date: entry.date, createdAt: entry.created_at };
   });
 }
 
@@ -288,7 +308,7 @@ function renderActivity(target, transactions, emptyText) {
     return '<article class="activity-item">' +
       '<span class="activity-symbol ' + info.tone + '">' + info.symbol + '</span>' +
       '<span class="activity-copy"><b>' + escapeHtml(person ? person.name : 'حساب محذوف') + '</b><small>' + info.label + ' · ' + paymentMethodLabel(entry.method) + (entry.note ? ' · ' + escapeHtml(entry.note) : '') + ' · ' + formatDate(entry.date) + '</small></span>' +
-      '<b class="activity-amount ' + (positive ? 'plus' : 'minus') + '">' + (positive ? '+ ' : '− ') + formatMoney(entry.amount) + '</b>' +
+      '<span class="activity-side"><b class="activity-amount ' + (positive ? 'plus' : 'minus') + '">' + (positive ? '+ ' : '− ') + formatMoney(entry.amount) + '</b><span class="activity-actions"><button type="button" data-edit-transaction="' + entry.id + '">تعديل</button><button type="button" data-delete-transaction="' + entry.id + '">حذف</button></span></span>' +
     '</article>';
   }).join('');
 }
@@ -398,16 +418,33 @@ function initializeBackNavigation() {
 
 window.__beinyGoHome = keepBackInsideApp;
 
-function openTransactionDialog() {
+function openTransactionDialog(entry) {
+  const editing = entry || null;
+  state.editingTransactionId = editing ? editing.id : '';
   state.transactionType = 'increase';
   state.paymentMethod = 'cash';
   el.transactionForm.reset();
   el.transactionDate.value = today();
+  el.transactionKicker.textContent = editing ? 'تصحيح حركة' : 'إضافة حساب وحركة';
+  el.transactionTitle.textContent = editing ? 'عدّل الحركة واحفظ التغيير' : 'سجّل كل حاجة مرة واحدة';
+  el.transactionSubmit.textContent = editing ? 'حفظ التعديل' : 'حفظ الحساب والحركة';
+  el.transactionPerson.readOnly = Boolean(editing);
+  el.transactionPhone.readOnly = Boolean(editing);
+  if (editing) {
+    const person = personById(editing.personId);
+    state.transactionType = editing.type;
+    state.paymentMethod = editing.method || 'cash';
+    el.transactionPerson.value = person ? person.name : '';
+    el.transactionPhone.value = person ? person.phone || '' : '';
+    el.transactionAmount.value = editing.amount;
+    el.transactionNote.value = editing.note || '';
+    el.transactionDate.value = editing.date || today();
+  }
   updateTransactionTypeButtons();
   updatePaymentMethodButtons();
   renderTransactionPeople();
   const selected = personById(state.selectedPersonId);
-  if (selected) {
+  if (selected && !editing) {
     el.transactionPerson.value = selected.name;
     el.transactionPhone.value = selected.phone || '';
   }
@@ -449,14 +486,20 @@ async function saveTransaction(event) {
     const current = requireSession();
     const date = el.transactionDate.value || today();
     const type = info.delta > 0 ? 'debt' : 'payment';
-    if (!person) {
+    const note = storedTransactionNote(state.paymentMethod, el.transactionNote.value);
+    if (state.editingTransactionId) {
+      const existing = state.transactions.find(function (item) { return item.id === state.editingTransactionId; });
+      if (!existing) throw new Error('لم نعثر على الحركة المطلوب تعديلها.');
+      await db('transactions', { method: 'PATCH', prefer: 'return=minimal', query: { id: 'eq.' + existing.id }, body: { customer_id: existing.personId, type: type, amount: amount, date: date, note: note } });
+      state.selectedPersonId = existing.personId;
+    } else if (!person) {
       const customerId = id('person');
       await db('customers', { method: 'POST', prefer: 'return=minimal', body: { id: customerId, user_id: current.user.id, name: name, phone: phone, notes: '', created_at: new Date().toISOString() } });
-      await db('transactions', { method: 'POST', prefer: 'return=minimal', body: { id: id('transaction'), user_id: current.user.id, customer_id: customerId, type: type, amount: amount, date: date, note: paymentMethodLabel(state.paymentMethod), created_at: new Date().toISOString() } });
+      await db('transactions', { method: 'POST', prefer: 'return=minimal', body: { id: id('transaction'), user_id: current.user.id, customer_id: customerId, type: type, amount: amount, date: date, note: note, created_at: new Date().toISOString() } });
       state.selectedPersonId = customerId;
     } else {
       if (phone && !person.phone) await db('customers', { method: 'PATCH', prefer: 'return=minimal', query: { id: 'eq.' + person.id }, body: { phone: phone } });
-      await db('transactions', { method: 'POST', prefer: 'return=minimal', body: { id: id('transaction'), user_id: current.user.id, customer_id: person.id, type: type, amount: amount, date: date, note: paymentMethodLabel(state.paymentMethod), created_at: new Date().toISOString() } });
+      await db('transactions', { method: 'POST', prefer: 'return=minimal', body: { id: id('transaction'), user_id: current.user.id, customer_id: person.id, type: type, amount: amount, date: date, note: note, created_at: new Date().toISOString() } });
       state.selectedPersonId = person.id;
     }
     localStorage.removeItem(INTENTIONALLY_EMPTY_KEY);
@@ -504,8 +547,20 @@ function downloadCsv() {
 }
 
 document.addEventListener('click', function (event) {
-  const target = event.target.closest('[data-view], [data-open-person], [data-open-transaction], [data-open-person-detail], [data-person-filter], [data-activity-filter], [data-transaction-type], [data-payment-method]');
+  const target = event.target.closest('[data-view], [data-open-person], [data-open-transaction], [data-open-person-detail], [data-person-filter], [data-activity-filter], [data-transaction-type], [data-payment-method], [data-edit-transaction], [data-delete-transaction]');
   if (!target) return;
+  if (target.dataset.editTransaction) {
+    const entry = state.transactions.find(function (item) { return item.id === target.dataset.editTransaction; });
+    if (entry) openTransactionDialog(entry);
+    return;
+  }
+  if (target.dataset.deleteTransaction) {
+    const entry = state.transactions.find(function (item) { return item.id === target.dataset.deleteTransaction; });
+    if (entry) confirmAction('حذف الحركة', 'سيتم حذف هذه الحركة فقط، ولن يمكن استرجاعها.', function () {
+      return db('transactions', { method: 'DELETE', prefer: 'return=minimal', query: { id: 'eq.' + entry.id } }).then(function () { return load(); }).then(function () { render(); });
+    });
+    return;
+  }
   if (target.dataset.view) {
     if (target.tagName === 'A') event.preventDefault();
     if (target.dataset.showBalance) {
