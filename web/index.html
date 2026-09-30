@@ -14,10 +14,12 @@
       <span class="profile-logo">ب</span>
       <p class="dialog-kicker">دفترك الخاص</p>
       <h1>ادخل إلى بيني</h1>
-      <p>اكتب كلمة المرور التي ضبطتها لحماية بياناتك.</p>
-      <label>كلمة المرور<input id="loginPassword" type="password" autocomplete="current-password" required /></label>
+      <p>بياناتك تُحفظ في حسابك وتظهر على أجهزتك بعد تسجيل الدخول.</p>
+      <label>البريد الإلكتروني<input id="loginEmail" type="email" autocomplete="email" required placeholder="name@example.com" /></label>
+      <label>كلمة المرور<input id="loginPassword" type="password" autocomplete="current-password" required minlength="8" /></label>
       <p class="login-error" id="loginError" hidden></p>
       <button class="form-submit" type="submit">دخول</button>
+      <button class="text-button create-account" id="signupButton" type="button">إنشاء حساب جديد</button>
     </form>
   </section>
   <div class="app-shell">
@@ -54,7 +56,7 @@
 
       <section class="view" id="profileView" data-view-panel="profile">
         <div class="page-title"><div><p class="date-label">حسابك</p><h1>إدارة الدفتر</h1></div></div>
-        <article class="profile-card"><span class="profile-logo">ب</span><div><strong>بيني</strong><small>كل حساب بينك وبين الناس، محفوظ على جهازك</small></div></article>
+        <article class="profile-card"><span class="profile-logo">ب</span><div><strong>بيني</strong><small>دفترك محفوظ بأمان ومتزامن بين أجهزتك</small></div></article>
         <button class="setting-row" id="starterButton" type="button"><span class="setting-icon">＋</span><span>إضافة حسابات جاهزة للتجربة<small>إضافة ١٠ حسابات وحركات للتجربة</small></span><b>‹</b></button>
         <button class="setting-row" id="exportProfileButton" type="button"><span class="setting-icon">⇩</span><span>تصدير نسخة احتياطية<small>ملف CSV بالزبائن والحركات</small></span><b>‹</b></button>
         <button class="setting-row danger-row" id="clearButton" type="button"><span class="setting-icon">×</span><span>مسح كل البيانات<small>لا يمكن التراجع بعد المسح</small></span><b>‹</b></button>
@@ -81,6 +83,7 @@
   <dialog id="transactionDialog" class="dialog"><form method="dialog" id="transactionForm"><button class="close-dialog" type="button" aria-label="إغلاق">×</button><p class="dialog-kicker">إضافة حساب وحركة</p><h2>سجّل كل حاجة مرة واحدة</h2><label>الاسم<input id="transactionPerson" list="peopleOptions" required placeholder="اكتب الاسم أو اختَر حسابًا موجودًا" autocomplete="off" /></label><datalist id="peopleOptions"></datalist><label>رقم الهاتف <small>اختياري للحساب الجديد</small><input id="transactionPhone" inputmode="tel" placeholder="01xxxxxxxxx" /></label><div class="transaction-types" id="transactionTypes"><button class="active" data-transaction-type="increase" type="button">هو عليه لي</button><button data-transaction-type="decrease" type="button">أنا عليا ليه</button></div><label id="amountLabel">المبلغ<input id="transactionAmount" required type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" /></label><div class="method-field"><span>طريقة التعامل</span><div class="payment-methods" id="paymentMethods"><button class="active" data-payment-method="cash" type="button">كاش</button><button data-payment-method="instapay" type="button">إنستا</button><button data-payment-method="cash-payment" type="button">نقدي</button></div></div><label>التاريخ<input id="transactionDate" type="date" required /></label><button class="form-submit" value="confirm">حفظ الحساب والحركة</button></form></dialog>
 
   <dialog id="confirmDialog" class="dialog confirm-dialog"><form method="dialog"><p class="dialog-kicker">تنبيه</p><h2 id="confirmTitle">تأكيد</h2><p id="confirmText"></p><div><button class="cancel-confirm" value="cancel">إلغاء</button><button class="form-submit" id="confirmButton" value="confirm">تأكيد</button></div></form></dialog>
+  <script src="./config.js"></script>
   <script src="./app.js"></script>
 </body>
 </html>

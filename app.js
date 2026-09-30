@@ -1,6 +1,7 @@
 const STORE_KEY = 'konnash-simple-ledger-v1';
 const INTENTIONALLY_EMPTY_KEY = 'beiny-intentionally-empty-v1';
-const APP_PASSWORD_KEY = 'beiny-access-password-v1';
+const AUTH_SESSION_KEY = 'beiny-supabase-session-v1';
+const SUPABASE = window.BEINY_SUPABASE || {};
 const STARTER_PHONES = new Set(['01012345678', '01198765432', '01222223333', '01056789012', '01544556677', '01133445566', '01099887766', '01277889900', '01566778899', '01100998877']);
 const currency = new Intl.NumberFormat('ar-EG', { maximumFractionDigits: 2, minimumFractionDigits: 2 });
 
@@ -46,11 +47,13 @@ const el = {
   exportProfileButton: document.getElementById('exportProfileButton'),
   starterButton: document.getElementById('starterButton'),
   clearButton: document.getElementById('clearButton'),
-  aboutButton: document.getElementById('aboutButton')
-  ,loginGate: document.getElementById('loginGate')
-  ,loginForm: document.getElementById('loginForm')
-  ,loginPassword: document.getElementById('loginPassword')
-  ,loginError: document.getElementById('loginError')
+  aboutButton: document.getElementById('aboutButton'),
+  loginGate: document.getElementById('loginGate'),
+  loginForm: document.getElementById('loginForm'),
+  loginEmail: document.getElementById('loginEmail'),
+  loginPassword: document.getElementById('loginPassword'),
+  signupButton: document.getElementById('signupButton'),
+  loginError: document.getElementById('loginError')
 };
 
 function id(prefix) {
@@ -70,50 +73,79 @@ function formatDate(date) {
   return Number.isNaN(value.getTime()) ? '-' : value.toLocaleDateString('ar-EG', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
-function password() {
-  return sessionStorage.getItem(APP_PASSWORD_KEY) || '';
+function session() {
+  try { return JSON.parse(sessionStorage.getItem(AUTH_SESSION_KEY) || 'null'); } catch { return null; }
 }
 
-async function api(path, options) {
-  const response = await fetch(path, {
+function requireSession() {
+  const value = session();
+  if (!value || !value.access_token || !value.user || !value.user.id) {
+    const error = new Error('سجّل الدخول أولًا.');
+    error.status = 401;
+    throw error;
+  }
+  return value;
+}
+
+async function supabaseRequest(path, options) {
+  if (!SUPABASE.url || !SUPABASE.publishableKey) throw new Error('إعداد Supabase غير مكتمل.');
+  const response = await fetch(SUPABASE.url.replace(/\/$/, '') + path, {
     cache: 'no-store',
     ...options,
     headers: {
+      apikey: SUPABASE.publishableKey,
       'Content-Type': 'application/json',
-      'X-App-Password': password(),
       ...(options && options.headers ? options.headers : {})
     }
   });
   const data = await response.json().catch(function () { return {}; });
   if (!response.ok) {
-    const error = new Error(data.error || 'تعذر الاتصال بالخادم.');
+    const error = new Error(data.message || data.error_description || data.error || 'تعذر الاتصال بقاعدة البيانات.');
     error.status = response.status;
     throw error;
   }
   return data;
 }
 
+async function db(table, options) {
+  const current = requireSession();
+  const query = new URLSearchParams(options && options.query ? options.query : {});
+  const response = await supabaseRequest('/rest/v1/' + table + (query.toString() ? '?' + query.toString() : ''), {
+    method: (options && options.method) || 'GET',
+    headers: {
+      Authorization: 'Bearer ' + current.access_token,
+      Prefer: (options && options.prefer) || 'return=representation'
+    },
+    body: options && options.body == null ? undefined : JSON.stringify(options && options.body)
+  });
+  return response;
+}
+
 function showLogin(message) {
   el.loginGate.hidden = false;
   el.loginError.textContent = message || '';
   el.loginError.hidden = !message;
-  setTimeout(function () { el.loginPassword.focus(); }, 0);
+  setTimeout(function () { el.loginEmail.focus(); }, 0);
 }
 
 function hideLogin() {
   el.loginGate.hidden = true;
   el.loginError.hidden = true;
+  el.loginEmail.value = '';
   el.loginPassword.value = '';
 }
 
 async function load() {
-  const data = await api('/api/state');
-  state.people = (data.customers || []).map(function (person) {
-    return { id: person.id, name: person.name, phone: person.phone || '', note: person.notes || '', type: 'contact', createdAt: person.createdAt };
+  const current = requireSession();
+  const filters = { select: 'id,name,phone,notes,created_at', user_id: 'eq.' + current.user.id, order: 'name.asc' };
+  const transactionFilters = { select: 'id,customer_id,type,amount,date,note,created_at', user_id: 'eq.' + current.user.id, order: 'date.asc,created_at.asc' };
+  const results = await Promise.all([db('customers', { query: filters }), db('transactions', { query: transactionFilters })]);
+  state.people = (results[0] || []).map(function (person) {
+    return { id: person.id, name: person.name, phone: person.phone || '', note: person.notes || '', type: 'contact', createdAt: person.created_at };
   });
-  state.transactions = (data.ledger || []).map(function (entry) {
+  state.transactions = (results[1] || []).map(function (entry) {
     const increase = entry.type === 'debt';
-    return { id: entry.id, personId: entry.customerId, type: increase ? 'increase' : 'decrease', amount: Number(entry.amount) || 0, delta: increase ? Number(entry.amount) || 0 : -(Number(entry.amount) || 0), method: 'cash', note: entry.note || '', date: entry.date, createdAt: entry.createdAt };
+    return { id: entry.id, personId: entry.customer_id, type: increase ? 'increase' : 'decrease', amount: Number(entry.amount) || 0, delta: increase ? Number(entry.amount) || 0 : -(Number(entry.amount) || 0), method: 'cash', note: entry.note || '', date: entry.date, createdAt: entry.created_at };
   });
 }
 
@@ -347,14 +379,17 @@ async function saveTransaction(event) {
     return;
   }
   try {
+    const current = requireSession();
     const date = el.transactionDate.value || today();
     const type = info.delta > 0 ? 'debt' : 'payment';
     if (!person) {
-      const saved = await api('/api/customers', { method: 'POST', body: JSON.stringify({ name: name, phone: phone, linkedTransactionType: type, linkedTransactionAmount: amount, linkedTransactionDate: date, linkedTransactionNote: paymentMethodLabel(state.paymentMethod) }) });
-      state.selectedPersonId = saved.customerId;
+      const customerId = id('person');
+      await db('customers', { method: 'POST', prefer: 'return=minimal', body: { id: customerId, user_id: current.user.id, name: name, phone: phone, notes: '', created_at: new Date().toISOString() } });
+      await db('transactions', { method: 'POST', prefer: 'return=minimal', body: { id: id('transaction'), user_id: current.user.id, customer_id: customerId, type: type, amount: amount, date: date, note: paymentMethodLabel(state.paymentMethod), created_at: new Date().toISOString() } });
+      state.selectedPersonId = customerId;
     } else {
-      if (phone && !person.phone) await api('/api/customers', { method: 'POST', body: JSON.stringify({ id: person.id, name: person.name, phone: phone, notes: person.note || '' }) });
-      await api('/api/transactions', { method: 'POST', body: JSON.stringify({ customerId: person.id, type: type, amount: amount, date: date, note: paymentMethodLabel(state.paymentMethod) }) });
+      if (phone && !person.phone) await db('customers', { method: 'PATCH', prefer: 'return=minimal', query: { id: 'eq.' + person.id }, body: { phone: phone } });
+      await db('transactions', { method: 'POST', prefer: 'return=minimal', body: { id: id('transaction'), user_id: current.user.id, customer_id: person.id, type: type, amount: amount, date: date, note: paymentMethodLabel(state.paymentMethod), created_at: new Date().toISOString() } });
       state.selectedPersonId = person.id;
     }
     localStorage.removeItem(INTENTIONALLY_EMPTY_KEY);
@@ -427,21 +462,21 @@ el.exportButton.addEventListener('click', downloadCsv);
 el.exportProfileButton.addEventListener('click', downloadCsv);
 el.starterButton.addEventListener('click', function () {
   confirmAction('إضافة حسابات جاهزة', 'سيتم إضافة ١٠ حسابات وحركات لتجربة التطبيق. يمكنك مسحها من الإعدادات لاحقًا.', function () {
-    return api('/api/seed', { method: 'POST' }).then(load).then(function () {
-    render();
-    setView('home');
-    });
+    alert('الحسابات الجاهزة غير متاحة بعد التحويل إلى الحسابات الآمنة. أضف حسابك الأول من زر إضافة حركة.');
   });
 });
 el.clearButton.addEventListener('click', function () {
   confirmAction('مسح كل البيانات', 'سيتم حذف كل الحسابات والحركات من الدفتر على كل أجهزتك.', function () {
-    return api('/api/reset', { method: 'POST' }).then(function () {
-    state.people = [];
-    state.transactions = [];
-    state.selectedPersonId = '';
-    localStorage.setItem(INTENTIONALLY_EMPTY_KEY, 'true');
-    render();
-    setView('home');
+    const current = requireSession();
+    return db('transactions', { method: 'DELETE', prefer: 'return=minimal', query: { user_id: 'eq.' + current.user.id } }).then(function () {
+      return db('customers', { method: 'DELETE', prefer: 'return=minimal', query: { user_id: 'eq.' + current.user.id } });
+    }).then(function () {
+      state.people = [];
+      state.transactions = [];
+      state.selectedPersonId = '';
+      localStorage.setItem(INTENTIONALLY_EMPTY_KEY, 'true');
+      render();
+      setView('home');
     });
   });
 });
@@ -458,25 +493,38 @@ el.todayLabel.textContent = new Date().toLocaleDateString('ar-EG', { weekday: 'l
 el.transactionDate.value = today();
 el.loginForm.addEventListener('submit', async function (event) {
   event.preventDefault();
-  sessionStorage.setItem(APP_PASSWORD_KEY, el.loginPassword.value);
   try {
+    const result = await supabaseRequest('/auth/v1/token?grant_type=password', { method: 'POST', body: JSON.stringify({ email: el.loginEmail.value.trim(), password: el.loginPassword.value }) });
+    sessionStorage.setItem(AUTH_SESSION_KEY, JSON.stringify(result));
     await load();
     hideLogin();
     render();
   } catch (error) {
-    sessionStorage.removeItem(APP_PASSWORD_KEY);
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
     showLogin(error.message || 'تعذر الدخول.');
   }
 });
 
+el.signupButton.addEventListener('click', async function () {
+  const email = el.loginEmail.value.trim();
+  const passwordValue = el.loginPassword.value;
+  if (!email || passwordValue.length < 8) return showLogin('اكتب بريدًا صحيحًا وكلمة مرور من ٨ أحرف على الأقل.');
+  try {
+    await supabaseRequest('/auth/v1/signup', { method: 'POST', body: JSON.stringify({ email: email, password: passwordValue }) });
+    showLogin('أُرسل رابط تأكيد إلى بريدك. افتحه ثم سجّل الدخول من هنا.');
+  } catch (error) {
+    showLogin(error.message || 'تعذر إنشاء الحساب.');
+  }
+});
+
 (async function start() {
-  if (!password()) return showLogin();
+  if (!session()) return showLogin();
   try {
     await load();
     hideLogin();
     render();
   } catch (error) {
-    sessionStorage.removeItem(APP_PASSWORD_KEY);
-    showLogin(error.status === 401 ? 'انتهت الجلسة. اكتب كلمة المرور مجددًا.' : error.message);
+    sessionStorage.removeItem(AUTH_SESSION_KEY);
+    showLogin(error.status === 401 ? 'انتهت الجلسة. سجّل الدخول مجددًا.' : error.message);
   }
 })();

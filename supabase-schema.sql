@@ -18,8 +18,15 @@ create table if not exists public.transactions (
   created_at text not null
 );
 
-create unique index if not exists idx_customers_phone_filled
-  on public.customers(phone)
+alter table public.customers add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.transactions add column if not exists user_id uuid references auth.users(id) on delete cascade;
+
+create index if not exists idx_customers_user_id on public.customers(user_id);
+create index if not exists idx_transactions_user_id on public.transactions(user_id);
+
+drop index if exists idx_customers_phone_filled;
+create unique index if not exists idx_customers_user_phone_filled
+  on public.customers(user_id, phone)
   where phone <> '';
 
 create index if not exists idx_transactions_customer_date
@@ -30,3 +37,15 @@ create index if not exists idx_transactions_customer_date
 -- Never put SUPABASE_SERVICE_ROLE_KEY in frontend JavaScript.
 alter table public.customers enable row level security;
 alter table public.transactions enable row level security;
+
+drop policy if exists "Users manage their customers" on public.customers;
+create policy "Users manage their customers"
+  on public.customers for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+drop policy if exists "Users manage their transactions" on public.transactions;
+create policy "Users manage their transactions"
+  on public.transactions for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);

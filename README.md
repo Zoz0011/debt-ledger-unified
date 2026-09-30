@@ -12,9 +12,8 @@ Open: http://localhost:3000
 ## Android APK
 
 The project includes a Capacitor Android wrapper with the application id
-`com.beiny.ledger`. The web interface is bundled into the APK. For
-multi-device sync, configure the deployed HTTPS service URL in
-`capacitor.config.ts` before building.
+`com.beiny.ledger`. The APK connects directly to Supabase over HTTPS, so the
+same signed-in account syncs across devices without a separate web server.
 
 After installing Android SDK Platform 36 and Build Tools 36, build a debug APK
 with:
@@ -34,24 +33,18 @@ The app now stores data in Supabase instead of local SQLite, so data will not di
 2. Open SQL Editor in Supabase.
 3. Copy and run everything from supabase-schema.sql.
 4. Go to Project Settings -> API.
-5. Copy Project URL and service_role secret key.
-6. Add these environment variables on Render or locally:
+5. Copy the Project URL and Publishable key into `config.js`.
+6. Run `supabase-schema.sql` in SQL Editor. It enables Row Level Security so
+   each signed-in user can access only their own customers and transactions.
 
-SUPABASE_URL=your_project_url
-SUPABASE_SERVICE_ROLE_KEY=your_service_role_secret_key
-APP_ACCESS_PASSWORD=a-long-unique-password-for-your-ledger
+The publishable key is safe to include in the app. Do not put a Supabase
+secret/service-role key in frontend JavaScript.
 
-Do not expose SUPABASE_SERVICE_ROLE_KEY in browser code. It is only used by server.js.
-`APP_ACCESS_PASSWORD` protects every data request and is kept only for the
-current app session on each device. Use a long password you do not reuse.
+## Sign in
 
-## Render deploy
-
-- Connect this GitHub repo as a Web Service.
-- Build Command: npm install
-- Start Command: npm start
-- Add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
-  `APP_ACCESS_PASSWORD` in Environment.
+On first launch, create an account with your email and a password of at least
+8 characters. Confirm the email message from Supabase, then sign in on each
+device with the same account to sync the ledger.
 
 ## Features
 
