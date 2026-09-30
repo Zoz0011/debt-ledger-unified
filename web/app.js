@@ -100,7 +100,7 @@ async function supabaseRequest(path, options) {
   });
   const data = await response.json().catch(function () { return {}; });
   if (!response.ok) {
-    const error = new Error(data.message || data.error_description || data.error || 'تعذر الاتصال بقاعدة البيانات.');
+    const error = new Error(data.message || data.msg || data.error_description || data.error || 'تعذر الاتصال بقاعدة البيانات.');
     error.status = response.status;
     throw error;
   }
