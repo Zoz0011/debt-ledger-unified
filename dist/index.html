@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#08715a" />
+  <title>بيني | كل حساب بينك وبين الناس</title>
+  <meta name="description" content="بيني: سجّل حسابات الناس وتابع ما بينكم بسهولة." />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <section class="login-gate" id="loginGate" aria-live="polite">
+    <form class="login-card" id="loginForm">
+      <span class="profile-logo">ب</span>
+      <p class="dialog-kicker">دفترك الخاص</p>
+      <h1>ادخل إلى بيني</h1>
+      <p>بياناتك تُحفظ في حسابك وتظهر على أجهزتك بعد تسجيل الدخول.</p>
+      <label>البريد الإلكتروني<input id="loginEmail" type="email" autocomplete="email" required placeholder="name@example.com" /></label>
+      <label>كلمة المرور<input id="loginPassword" type="password" autocomplete="current-password" required minlength="8" /></label>
+      <p class="login-error" id="loginError" hidden></p>
+      <button class="form-submit" type="submit">دخول</button>
+      <button class="text-button create-account" id="signupButton" type="button">إنشاء حساب جديد</button>
+    </form>
+  </section>
+  <div class="app-shell">
+    <header class="topbar">
+      <a class="brand" href="#home" data-view="home"><span class="brand-icon">ب</span><span>بيني</span></a>
+      <div class="topbar-actions"><button class="icon-btn" id="exportButton" type="button" title="تصدير البيانات">⇩</button><button class="avatar" id="aboutButton" type="button" title="عن بيني">أ</button></div>
+    </header>
+
+    <main class="main-content">
+      <section class="view active" id="homeView" data-view-panel="home">
+        <p class="date-label" id="todayLabel"></p>
+        <div class="welcome"><div><p>أهلاً بك</p><h1>كل حساباتك <em>واضحة.</em></h1></div><button class="small-add" data-open-transaction type="button">＋ إضافة حركة</button></div>
+        <section class="summary-grid" aria-label="ملخص الديون">
+          <article class="summary-card receive"><span class="summary-icon">↓</span><p>هم عليهم لي</p><strong id="receivableTotal">٠ ج.م</strong><small id="receivablePeople">لا توجد مستحقات</small></article>
+          <article class="summary-card pay"><span class="summary-icon">↑</span><p>أنا عليا ليهم</p><strong id="payableTotal">٠ ج.م</strong><small id="payablePeople">لا توجد التزامات</small></article>
+        </section>
+        <section class="quick-row"><button type="button" data-open-transaction><i>＋</i><span>إضافة حساب</span></button><button type="button" data-view="people" data-show-balance="receive"><i>↓</i><span>هم عليهم لي</span></button><button type="button" data-view="people" data-show-balance="pay"><i>↑</i><span>أنا عليا ليهم</span></button></section>
+        <section class="section-head"><div><h2>آخر الحركات</h2><p>تابع ما تم تسجيله مؤخرًا</p></div><button class="text-button" type="button" data-view="activity">عرض الكل</button></section>
+        <div class="activity-list" id="recentActivity"></div>
+      </section>
+
+      <section class="view" id="peopleView" data-view-panel="people">
+        <div class="page-title"><div><p class="date-label">دفترك</p><h1>الحسابات</h1></div><button class="round-add" type="button" data-open-transaction aria-label="إضافة حساب">＋</button></div>
+        <label class="search"><span>⌕</span><input id="peopleSearch" type="search" placeholder="ابحث بالاسم أو رقم الهاتف" autocomplete="off" /></label>
+        <div class="filters" role="tablist"><button class="active" data-person-filter="all" type="button">الكل</button><button data-person-filter="receive" type="button">هم عليهم لي</button><button data-person-filter="pay" type="button">أنا عليا ليهم</button></div>
+        <div class="people-list" id="peopleList"></div>
+      </section>
+
+      <section class="view" id="activityView" data-view-panel="activity">
+        <div class="page-title"><div><p class="date-label">دفترك</p><h1>كل الحركات</h1></div><button class="round-add" type="button" data-open-transaction aria-label="إضافة حركة">＋</button></div>
+        <div class="filters activity-filter" role="tablist"><button class="active" data-activity-filter="all" type="button">الكل</button><button data-activity-filter="owed" type="button">ديون</button><button data-activity-filter="payment" type="button">دفعات</button></div>
+        <div class="activity-list full-list" id="activityList"></div>
+      </section>
+
+      <section class="view" id="profileView" data-view-panel="profile">
+        <div class="page-title"><div><p class="date-label">حسابك</p><h1>إدارة الدفتر</h1></div></div>
+        <article class="profile-card"><span class="profile-logo">ب</span><div><strong>بيني</strong><small>دفترك محفوظ بأمان ومتزامن بين أجهزتك</small></div></article>
+        <button class="setting-row" id="starterButton" type="button"><span class="setting-icon">＋</span><span>إضافة حسابات جاهزة للتجربة<small>إضافة ١٠ حسابات وحركات للتجربة</small></span><b>‹</b></button>
+        <button class="setting-row" id="exportProfileButton" type="button"><span class="setting-icon">⇩</span><span>تصدير نسخة احتياطية<small>ملف CSV بالزبائن والحركات</small></span><b>‹</b></button>
+        <button class="setting-row danger-row" id="clearButton" type="button"><span class="setting-icon">×</span><span>مسح كل البيانات<small>لا يمكن التراجع بعد المسح</small></span><b>‹</b></button>
+      </section>
+
+      <section class="view detail-view" id="detailView" data-view-panel="detail">
+        <button class="back-button" type="button" data-view="people">← رجوع للحسابات</button>
+        <div class="detail-hero" id="personDetail"></div>
+        <div class="detail-action"><button class="primary-action" type="button" data-open-transaction>＋ إضافة حركة لهذا الحساب</button></div>
+        <section class="section-head compact"><div><h2>سجل الحساب</h2><p>كل الحركات المسجّلة</p></div></section>
+        <div class="activity-list" id="personTransactions"></div>
+      </section>
+    </main>
+
+    <nav class="bottom-nav" aria-label="القائمة الرئيسية">
+      <button class="active" type="button" data-view="home"><span>⌂</span>الرئيسية</button>
+      <button type="button" data-view="people"><span>♙</span>الدفتر</button>
+      <button class="add-tab" type="button" data-open-transaction aria-label="إضافة حركة جديدة">＋</button>
+      <button type="button" data-view="activity"><span>↕</span>الحركات</button>
+      <button type="button" data-view="profile"><span>☷</span>المزيد</button>
+    </nav>
+  </div>
+
+  <dialog id="transactionDialog" class="dialog"><form method="dialog" id="transactionForm"><button class="close-dialog" type="button" aria-label="إغلاق">×</button><p class="dialog-kicker">إضافة حساب وحركة</p><h2>سجّل كل حاجة مرة واحدة</h2><label>الاسم<input id="transactionPerson" list="peopleOptions" required placeholder="اكتب الاسم أو اختَر حسابًا موجودًا" autocomplete="off" /></label><datalist id="peopleOptions"></datalist><label>رقم الهاتف <small>اختياري للحساب الجديد</small><input id="transactionPhone" inputmode="tel" placeholder="01xxxxxxxxx" /></label><div class="transaction-types" id="transactionTypes"><button class="active" data-transaction-type="increase" type="button">هو عليه لي</button><button data-transaction-type="decrease" type="button">أنا عليا ليه</button></div><label id="amountLabel">المبلغ<input id="transactionAmount" required type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="0.00" /></label><div class="method-field"><span>طريقة التعامل</span><div class="payment-methods" id="paymentMethods"><button class="active" data-payment-method="cash" type="button">كاش</button><button data-payment-method="instapay" type="button">إنستا</button><button data-payment-method="cash-payment" type="button">نقدي</button></div></div><label>التاريخ<input id="transactionDate" type="date" required /></label><button class="form-submit" value="confirm">حفظ الحساب والحركة</button></form></dialog>
+
+  <dialog id="confirmDialog" class="dialog confirm-dialog"><form method="dialog"><p class="dialog-kicker">تنبيه</p><h2 id="confirmTitle">تأكيد</h2><p id="confirmText"></p><div><button class="cancel-confirm" value="cancel">إلغاء</button><button class="form-submit" id="confirmButton" value="confirm">تأكيد</button></div></form></dialog>
+  <script src="./config.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
