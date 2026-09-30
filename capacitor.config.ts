@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.beiny.ledger',
-  appName: 'بيني',
+  appName: 'صافي',
   webDir: 'web',
   server: {
     url: 'https://beiny-ledger.pauper-93phylumbunni.chatgpt.site',

@@ -555,7 +555,7 @@ document.querySelectorAll('.close-dialog').forEach(function (button) {
   });
 });
 
-el.aboutButton.addEventListener('click', function () { alert('بيني: تطبيق بسيط للحسابات بينك وبين الناس.'); });
+el.aboutButton.addEventListener('click', function () { alert('صافي: تطبيق بسيط للحسابات بينك وبين الناس.'); });
 el.themeButton.addEventListener('click', toggleTheme);
 el.themeProfileButton.addEventListener('click', toggleTheme);
 el.logoutButton.addEventListener('click', function () {
