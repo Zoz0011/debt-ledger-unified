@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">بيني</string>
+    <string name="title_activity_main">بيني</string>
+    <string name="package_name">com.beiny.ledger</string>
+    <string name="custom_url_scheme">com.beiny.ledger</string>
+</resources>

@@ -25,7 +25,8 @@ create unique index if not exists idx_customers_phone_filled
 create index if not exists idx_transactions_customer_date
   on public.transactions(customer_id, date, created_at);
 
--- Keep Row Level Security off because the Node server uses the private Service Role key.
+-- The Node server uses the private Service Role key, which bypasses RLS.
+-- No client-side key can read these financial records directly.
 -- Never put SUPABASE_SERVICE_ROLE_KEY in frontend JavaScript.
-alter table public.customers disable row level security;
-alter table public.transactions disable row level security;
+alter table public.customers enable row level security;
+alter table public.transactions enable row level security;

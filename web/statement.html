@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>كشف حساب العميل</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="bg-glow bg-glow-a"></div>
+    <div class="bg-glow bg-glow-b"></div>
+    <main class="shell statement-page">
+      <header class="hero card statement-hero">
+        <div>
+          <p class="eyebrow">كشف حساب مستقل</p>
+          <h1 id="pageStatementTitle">جاري تحميل كشف الحساب...</h1>
+          <p class="lead" id="pageStatementMeta">التاريخ والساعة يظهران مع كل حركة.</p>
+        </div>
+        <div class="hero-actions">
+          <a class="btn ghost" href="./index.html">رجوع للرئيسية</a>
+          <button type="button" class="btn primary" id="printStatement">طباعة الكشف</button>
+        </div>
+      </header>
+
+      <section class="card stack">
+        <div class="statement-summary" id="pageStatementSummary"></div>
+        <div class="customer-report" id="pageCustomerReport"></div>
+        <div class="table-wrap statement-table">
+          <table>
+            <thead>
+              <tr><th>التاريخ والساعة</th><th>النوع</th><th>المبلغ</th><th>الرصيد بعد الحركة</th><th>ملاحظة</th></tr>
+            </thead>
+            <tbody id="pageStatementTable"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+    <script src="./statement.js"></script>
+  </body>
+</html>
+

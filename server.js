@@ -1,6 +1,7 @@
 import http from "node:http";
 import fs from "node:fs";
 import path from "node:path";
+import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -9,6 +10,7 @@ const PORT = process.env.PORT || 3000;
 
 const SUPABASE_URL = String(process.env.SUPABASE_URL || '').replace(/\/$/, '');
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_ANON_KEY || '';
+const APP_ACCESS_PASSWORD = process.env.APP_ACCESS_PASSWORD || '';
 
 const MIME = {
   ".html": "text/html; charset=utf-8",
@@ -49,6 +51,17 @@ function sendText(res, status, text) {
     'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate'
   });
   res.end(text);
+}
+
+function passwordsMatch(candidate) {
+  if (!APP_ACCESS_PASSWORD || !candidate) return false;
+  const expected = Buffer.from(APP_ACCESS_PASSWORD);
+  const received = Buffer.from(String(candidate));
+  return expected.length === received.length && crypto.timingSafeEqual(expected, received);
+}
+
+function isAuthorized(req) {
+  return passwordsMatch(req.headers['x-app-password']);
 }
 
 function parseBody(req) {
@@ -266,6 +279,8 @@ async function seedDemo() {
 
 async function handleApi(req, res, pathname) {
   if (pathname === '/api/health') return sendJson(res, 200, { ok: true, db: Boolean(SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY), storage: 'supabase' });
+  if (!APP_ACCESS_PASSWORD) return sendJson(res, 503, { error: 'كلمة مرور التطبيق غير مضبوطة على الخادم.' });
+  if (!isAuthorized(req)) return sendJson(res, 401, { error: 'كلمة المرور غير صحيحة أو انتهت الجلسة.' });
   if (pathname === '/api/summary' && req.method === 'GET') return sendJson(res, 200, await summaryData());
   if (pathname === '/api/customers' && req.method === 'GET') return sendJson(res, 200, await customersWithBalance());
   if (pathname === '/api/state' && req.method === 'GET') return sendJson(res, 200, { customers: await customersWithBalance(), ledger: (await allTransactionsRaw()).map(mapTransaction), selectedCustomerId: '' });
